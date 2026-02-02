@@ -1,0 +1,164 @@
+
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Gridiron Pro 2026: Road to Starter</title>
+    <style>
+        body { margin: 0; background: #050505; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        #menu, #interaction { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
+        .btn { background: #d4af37; color: black; padding: 15px 35px; margin: 10px; border: none; font-weight: bold; cursor: pointer; width: 280px; font-size: 18px; border-radius: 5px; transition: 0.2s; }
+        .btn:hover { background: #fff; transform: scale(1.05); }
+        #game-ui { position: absolute; top: 0; width: 100%; background: rgba(0,0,0,0.8); padding: 10px; display: flex; justify-content: space-around; border-bottom: 2px solid #d4af37; font-weight: bold; z-index: 50; }
+        .coach-card { background: #1a1a1a; border: 3px solid #d4af37; padding: 30px; border-radius: 12px; max-width: 450px; }
+        canvas { display: block; background: #1e4d1e; cursor: none; }
+    </style>
+</head>
+<body>
+
+<div id="game-ui" style="display:none;">
+    <span>RANK: <span id="rank-ui">3rd String</span></span>
+    <span>XP: <span id="xp-ui">0</span> / <span id="goal-ui">100</span></span>
+    <span>TDS: <span id="td-ui">0</span></span>
+</div>
+
+<div id="menu">
+    <h1>GRIDIRON PRO 2026</h1>
+    <p>Earn XP to become the Starter!</p>
+    <button class="btn" onclick="startGame('QB')">QB CAREER</button>
+    <button class="btn" onclick="startGame('WR')">WR CAREER</button>
+    <button class="btn" onclick="startGame('RB')">RB CAREER</button>
+</div>
+
+<div id="interaction" style="display:none;">
+    <div class="coach-card">
+        <h2 id="msg-title">COACH'S OFFICE</h2>
+        <p id="msg-body">Keep practicing, kid.</p>
+        <button class="btn" onclick="resumeGame()">BACK TO THE FIELD</button>
+    </div>
+</div>
+
+<canvas id="field"></canvas>
+
+<script>
+const canvas = document.getElementById("field");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let xp = 0, tds = 0, rank = "3rd String", pos = "", active = false;
+let players = [], ball = { x:0, y:0, z:0, vz:0, vx:0, vy:0, flying:false, carrier:null };
+let keys = {};
+
+function startGame(selectedPos) {
+    pos = selectedPos;
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("game-ui").style.display = "flex";
+    active = true;
+    resetPlay();
+    animate();
+}
+
+function checkProgression() {
+    let oldRank = rank;
+    if (xp >= 300) rank = "STARTER";
+    else if (xp >= 100) rank = "2nd String";
+
+    if (oldRank !== rank) {
+        active = false;
+        document.getElementById("interaction").style.display = "flex";
+        document.getElementById("msg-title").innerText = rank === "STARTER" ? "OFFICIAL STARTER" : "PROMOTED TO 2nd STRING";
+        document.getElementById("msg-body").innerText = rank === "STARTER" ? 
+            "You're the top guy now. Your speed is maxed out. Go win the Bowl!" : 
+            "You're moving up the depth chart. Keep showing that hustle!";
+    }
+}
+
+function resumeGame() {
+    document.getElementById("interaction").style.display = "none";
+    active = true;
+    resetPlay();
+}
+
+class Player {
+    constructor(x, y, team, isUser) {
+        this.x = x; this.y = y; this.vx = 0; this.vy = 0;
+        this.team = team; this.isUser = isUser;
+        this.fric = 0.93;
+    }
+    update() {
+        let speed = rank === "STARTER" ? 0.7 : (rank === "2nd String" ? 0.55 : 0.4);
+        if (this.isUser) {
+            if (keys["ArrowUp"]) this.vy -= speed;
+            if (keys["ArrowDown"]) this.vy += speed;
+            if (keys["ArrowLeft"]) this.vx -= speed;
+            if (keys["ArrowRight"]) this.vx += speed;
+        } else {
+            let target = ball.carrier ? ball.carrier : ball;
+            this.vx += (target.x > this.x ? 0.18 : -0.18);
+            this.vy += (target.y > this.y ? 0.18 : -0.18);
+        }
+        this.vx *= this.fric; this.vy *= this.fric;
+        this.x += this.vx; this.y += this.vy;
+    }
+    draw() {
+        ctx.fillStyle = this.team === "HOME" ? "#0055ff" : "#ee0000";
+        ctx.beginPath(); ctx.arc(this.x, this.y, 14, 0, Math.PI*2); ctx.fill();
+        if (this.isUser) { ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 4; ctx.stroke(); }
+    }
+}
+
+function resetPlay() {
+    players = [
+        new Player(150, canvas.height/2, "HOME", (pos === 'QB')),
+        new Player(250, canvas.height/4, "HOME", (pos === 'WR')),
+        new Player(canvas.width - 200, canvas.height/2, "AWAY", false)
+    ];
+    ball.carrier = (pos === "WR") ? players[0] : players[0];
+    ball.flying = false; ball.z = 0;
+}
+
+window.addEventListener("keydown", e => {
+    keys[e.code] = true;
+    if (e.code === "Space" && active && ball.carrier && ball.carrier.isUser) {
+        ball.carrier = null; ball.flying = true; ball.vx = 10; ball.vz = 8;
+    }
+});
+window.addEventListener("keyup", e => keys[e.code] = false);
+
+function animate() {
+    if (!active) return requestAnimationFrame(animate);
+    ctx.fillStyle = "#1e4d1e"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    
+    // Draw Yard Lines
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    for(let i=0; i<canvas.width; i+=100) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+
+    players.forEach(p => {
+        p.update(); p.draw();
+        if (ball.carrier && ball.carrier.team !== p.team && Math.hypot(p.x-ball.carrier.x, p.y-ball.carrier.y) < 20) resetPlay();
+    });
+
+    if (ball.flying) {
+        ball.x += ball.vx; ball.z += ball.vz; ball.vz -= 0.35;
+        if (ball.z <= 0) {
+            ball.flying = false; ball.z = 0;
+            players.forEach(p => { if(Math.hypot(p.x-ball.x, p.y-ball.y) < 35) { ball.carrier = p; xp += 15; checkProgression(); } });
+        }
+    } else if (ball.carrier) {
+        ball.x = ball.carrier.x; ball.y = ball.carrier.y;
+        if (ball.x > canvas.width - 50) { tds++; xp += 50; checkProgression(); resetPlay(); }
+    }
+
+    ctx.fillStyle = "#8b4513";
+    ctx.beginPath(); ctx.arc(ball.x, ball.y - ball.z, 8, 0, Math.PI*2); ctx.fill();
+
+    document.getElementById("xp-ui").innerText = xp;
+    document.getElementById("td-ui").innerText = tds;
+    document.getElementById("rank-ui").innerText = rank;
+    document.getElementById("goal-ui").innerText = xp < 100 ? "100" : (xp < 300 ? "300" : "MAX");
+    requestAnimationFrame(animate);
+}
+</script>
+</body>
+</html>
